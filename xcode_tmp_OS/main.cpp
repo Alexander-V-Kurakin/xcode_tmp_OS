@@ -41,3 +41,11 @@ int main(int argc, const char * argv[]) {
     
     exit( 0 );
 }
+
+/*  Output:
+ 
+ Hello, C++14 World!
+ f2() is called
+ Back to main()
+ Program ended with exit code: 0
+*/
