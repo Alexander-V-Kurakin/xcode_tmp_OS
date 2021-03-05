@@ -13,71 +13,98 @@ using namespace std;
 
 #define TRACE(x) (cout << #x << " = " << x << endl)
 
-#define EXCEPTION_TYPE_1 1
-#define EXCEPTION_TYPE_2 2
+#define ANY_VALUE 1     // ANY_VALUE != 0
 
-static jmp_buf exception_env;   // Space to preserve the stack (environment) frame
-static int exception_type;
+jmp_buf main_task_env, child_task_env;  // Space to preserve the stack (environment) frame
 
-void f2() {
-    cout << "Entering f2()" << endl;
-
-    exception_type = EXCEPTION_TYPE_2;
-    longjmp( exception_env, exception_type );   // Jumps back to where setjmp() was called,
-                                                // making setjmp() now return exception_type
-}
-
-void f1() {
-    jmp_buf tmp_env;
+void child_task() {
+    int cc;     // Completion code
     
-    cout << "Entering f1()" << endl;
-    
-    memcpy( tmp_env, exception_env, sizeof( tmp_env ));
-
-    switch ( setjmp( exception_env )) {
+    while ( true ) {
+        cout << "Child process entering" << endl;
             
-            // Normal, desired operation
-            case 0:
-                cout << "Calling f2()" << endl;
-                f2();
-                
-            case EXCEPTION_TYPE_2:
-                cout << "f2() failed, exception type: " << exception_type << ", " << "remapping to type 1" << endl;
-                exception_type = EXCEPTION_TYPE_1;
+        if ( !( cc = setjmp( child_task_env ))) {
+            TRACE(cc);
+            longjmp( main_task_env, ANY_VALUE );
+        }
+        
+        TRACE(cc);
 
-            default:
-                memcpy( exception_env, tmp_env, sizeof( exception_env ));   // Restore exception stack and
-                longjmp( exception_env, exception_type );                   // continue handling the exception
+        cout << "Child process end" << endl;
+
+        if ( !( cc = setjmp( child_task_env ))) {
+            TRACE(cc);
+            longjmp( main_task_env, ANY_VALUE );
+        }
     }
 }
 
 int main(int argc, const char * argv[]) {
     // insert code here...
+    int cc;     // Completion code
+    
     cout << "Hello, C++14 World!" << endl;
     
-    if ( setjmp( exception_env ))   // setjmp() returns 0
-                                    // When longjmp() jumps back,
-                                    // setjmp() returns exception_type
-        
-        cout << "f1() failed, exception type: " << exception_type << endl;
-    
-    else {
-        cout << "Calling f1()" << endl;
-        f1();
-        cout << "f1() called" << endl;   // Not reached
+    if ( !( cc = setjmp( main_task_env ))) {    // setjmp() returns 0
+                                                // When longjmp() jumps back,
+                                                // setjmp() returns ANY_VALUE
+        TRACE(cc);
+        child_task();
     }
     
-    exit( 0 );
+    TRACE(cc);
+    
+    for ( int i = 0; i < 5; i++ ) {           // Limited for debugging purpose
+    //while ( true ) {
+        cout << "Parent process" << endl;
+            
+        if ( !( cc = setjmp( main_task_env ))) {
+            TRACE(cc);
+            longjmp( child_task_env, ANY_VALUE );
+        }
+        
+        TRACE(cc);
+    }
+    
+    //exit( 0 );    // Code will never be executed. Instead, the flag should be set
+                    // to indicate the end of context switching process and then
+                    // longjmp( main_task_env, ANY_VALUE ) etc.
 }
 
 /*  Output:
  
  Hello, C++14 World!
- Calling f1()
- Entering f1()
- Calling f2()
- Entering f2()
- f2() failed, exception type: 2, remapping to type 1
- f1() failed, exception type: 1
+ cc = 0
+ Child process entering
+ cc = 0
+ cc = 1
+ Parent process
+ cc = 0
+ cc = 1
+ Child process end
+ cc = 0
+ cc = 1
+ Parent process
+ cc = 0
+ Child process entering
+ cc = 0
+ cc = 1
+ Parent process
+ cc = 0
+ cc = 1
+ Child process end
+ cc = 0
+ cc = 1
+ Parent process
+ cc = 0
+ Child process entering
+ cc = 0
+ cc = 1
+ Parent process
+ cc = 0
+ cc = 1
+ Child process end
+ cc = 0
+ cc = 1
  Program ended with exit code: 0
 */
