@@ -9,6 +9,15 @@
 #include <iostream>
 #include <setjmp.h>
 
+// Note.
+// If the return is from a direct invocation, setjmp( jmp_buf env ) returns 0. If the
+// return is from a call to longjmp(), setjmp() returns a nonzero value.
+//
+// After longjmp( jmp_buf env, int value ) is completed, program execution continues as if
+// the corresponding invocation of setjmp() had just returned. If the value passed to
+// longjmp() is 0, setjmp() will behave as if it had returned 1; otherwise, it will behave
+// as if it had returned value.
+
 using namespace std;
 
 #define TRACE(x) (cout << #x << " = " << x << endl)
