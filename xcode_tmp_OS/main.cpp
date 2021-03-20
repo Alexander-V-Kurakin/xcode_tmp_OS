@@ -7,113 +7,103 @@
 //
 
 #include <iostream>
-#include <setjmp.h>
-
-// Note.
-// If the return is from a direct invocation, setjmp( jmp_buf env ) returns 0. If the
-// return is from a call to longjmp(), setjmp() returns a nonzero value.
-//
-// After longjmp( jmp_buf env, int value ) is completed, program execution continues as if
-// the corresponding invocation of setjmp() had just returned. If the value passed to
-// longjmp() is 0, setjmp() will behave as if it had returned 1; otherwise, it will behave
-// as if it had returned value.
+#include <unistd.h>
+#include <pthread.h>
 
 using namespace std;
 
 #define TRACE(x) (cout << #x << " = " << x << endl)
 
-#define ANY_VALUE 1     // ANY_VALUE != 0
+pid_t pid;
 
-jmp_buf main_task_env, child_task_env;  // Space to preserve the stack (environment) frame
+// Create and initialise the mutex for use
+pthread_mutex_t loop_counter_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-void child_task() {
-    int cc;     // Completion code
+// The global resource the mutex is to protect
+int loop_counter;
+
+
+void* thread_func(void* arg)
+{
+    pthread_mutex_lock(&loop_counter_mutex);
     
-    while ( true ) {
-        cout << "Child process entering" << endl;
-            
-        if ( !( cc = setjmp( child_task_env ))) {
-            TRACE(cc);
-            longjmp( main_task_env, ANY_VALUE );
-        }
-        
-        TRACE(cc);
-
-        cout << "Child process end" << endl;
-
-        if ( !( cc = setjmp( child_task_env ))) {
-            TRACE(cc);
-            longjmp( main_task_env, ANY_VALUE );
-        }
-    }
+    for (loop_counter = 0; loop_counter < 10; loop_counter++)
+        cout << "I'm a " << (char*)arg << "loop counter " << loop_counter << endl;
+    
+    pthread_mutex_unlock(&loop_counter_mutex);
+    
+    return NULL;
 }
+
+void do_child_thing()
+{
+    cout << "I'm a child w/ pid = " << pid << ", my parent pid = " << getpid() << endl;
+    
+    pthread_t idThread1, idThread2;
+    
+    pthread_create(&idThread1, NULL, thread_func, (void*) "thread's 1 ");
+    pthread_join(idThread1, NULL);
+    pthread_create(&idThread2, NULL, thread_func, (void*) "thread's 2 ");
+    pthread_join(idThread2, NULL);
+}
+
+void do_parent_thing()
+{
+    cout << "I'm a parent w/ pid = " << pid << ", my parent pid = " << getppid() << endl;
+    //    TRACE(getppid());    // returns the id of the calling process
+}
+
 
 int main(int argc, const char * argv[]) {
     // insert code here...
-    int cc;     // Completion code
+    std::cout << "Hello, C++14 World!" << endl;
     
-    cout << "Hello, C++14 World!" << endl;
+    // fork() makes a child process that is an (almost) exact copy of its parent process.
+    //
+    // The parent process continues executing the program from the point that fork() was called.
+    // The child process, too, executes, as now another parallel process, the same program from
+    // the same place.
     
-    if ( !( cc = setjmp( main_task_env ))) {    // setjmp() returns 0
-                                                // When longjmp() jumps back,
-                                                // setjmp() returns ANY_VALUE
-        TRACE(cc);
-        child_task();
-    }
-    
-    TRACE(cc);
-    
-    for ( int i = 0; i < 5; i++ ) {           // Limited for debugging purpose
-    //while ( true ) {
-        cout << "Parent process" << endl;
+    switch ( pid = fork() ){
+        case -1:
+            cout << "fork() failed" << endl;
+            break;
             
-        if ( !( cc = setjmp( main_task_env ))) {
-            TRACE(cc);
-            longjmp( child_task_env, ANY_VALUE );
-        }
-        
-        TRACE(cc);
+        case 0:
+            do_child_thing();
+            break;
+            
+        default:
+            do_parent_thing();
     }
     
-    //exit( 0 );    // Code will never be executed. Instead, the flag should be set
-                    // to indicate the end of context switching process and then
-                    // longjmp( main_task_env, ANY_VALUE ) etc.
+    exit( 0 );
 }
 
-/*  Output:
+/* Output:
  
  Hello, C++14 World!
- cc = 0
- Child process entering
- cc = 0
- cc = 1
- Parent process
- cc = 0
- cc = 1
- Child process end
- cc = 0
- cc = 1
- Parent process
- cc = 0
- Child process entering
- cc = 0
- cc = 1
- Parent process
- cc = 0
- cc = 1
- Child process end
- cc = 0
- cc = 1
- Parent process
- cc = 0
- Child process entering
- cc = 0
- cc = 1
- Parent process
- cc = 0
- cc = 1
- Child process end
- cc = 0
- cc = 1
+ I'm a parent w/ pid = 1422, my parent pid = 1421
+ I'm a child w/ pid = 0, my parent pid = 1422
+ I'm a thread's 1 loop counter 0
+ I'm a thread's 1 loop counter 1
+ I'm a thread's 1 loop counter 2
+ I'm a thread's 1 loop counter 3
+ I'm a thread's 1 loop counter 4
+ I'm a thread's 1 loop counter 5
+ I'm a thread's 1 loop counter 6
+ I'm a thread's 1 loop counter 7
+ I'm a thread's 1 loop counter 8
+ I'm a thread's 1 loop counter 9
+ I'm a thread's 2 loop counter 0
+ I'm a thread's 2 loop counter 1
+ I'm a thread's 2 loop counter 2
+ I'm a thread's 2 loop counter 3
+ I'm a thread's 2 loop counter 4
+ I'm a thread's 2 loop counter 5
+ I'm a thread's 2 loop counter 6
+ I'm a thread's 2 loop counter 7
+ I'm a thread's 2 loop counter 8
+ I'm a thread's 2 loop counter 9
  Program ended with exit code: 0
 */
